@@ -10,7 +10,7 @@
 
 Pixelwright는 GPT 계열 호스트와 Claude에서 함께 쓰는 AI 스킬입니다. 캐릭터·아이템·UI 아이콘의 일정한 도트 크기, 격자 안에 온전히 들어가는 정사각형 셀, 셀 내부의 정확한 단일 RGBA 색상을 생성하고 검사합니다. 두 생태계에서 동일한 `SKILL.md`와 Python 도구를 사용하며, 실행 호스트에는 파일 접근과 Python 실행 기능이 필요합니다.
 
-팔레트와 논리 픽셀 행렬을 먼저 만든 뒤 정수 배율로 확대하고, 내보낸 PNG를 검사합니다. 이름 있는 색상과 명암 램프를 여러 에셋에서 재사용하거나, 이미 유효한 격자에서 색상을 팔레트에 맞춰 변환할 수 있습니다. 애니메이션은 프레임을 하나의 스프라이트 시트에 배치하고 골격을 선언해, 몸과 사물의 각 부위가 움직이는 동안 일관되게 유지되는지 검사합니다. 기존 이미지에는 검사 전에 의도한 격자 규격을 선언합니다. 기본 결과에는 원본 이미지와 실제 격자 QA 미리보기를 함께 보여 주어 사용자도 셀을 눈으로 확인할 수 있습니다.
+팔레트와 논리 픽셀 행렬을 먼저 만든 뒤 정수 배율로 확대하고, 내보낸 PNG를 검사합니다. 이름 있는 색상과 명암 램프를 여러 에셋에서 재사용하거나, 이미 유효한 격자에서 색상을 팔레트에 맞춰 변환할 수 있습니다. 생성형 애니메이션은 선택한 2D 시안을 기준으로 임의 부위의 크기·색·비율·무늬와 시간에 따른 움직임을 검사하며 골격은 필수가 아닙니다. 선언형 리그도 선택적으로 사용할 수 있습니다. 기존 이미지에는 검사 전에 의도한 격자 규격을 선언합니다. 기본 결과에는 원본 이미지와 실제 격자 QA 미리보기를 함께 보여 주어 사용자도 셀을 눈으로 확인할 수 있습니다.
 
 ## 같은 기사, 두 가지 격자 규격
 
@@ -70,6 +70,36 @@ python pixelwright/scripts/pixelwright.py inspect runs/lantern-build-v1/rendered
 
 예제는 16×16 논리 캔버스를 8배 확대해 128×128 PNG를 만듭니다. `rendered.png`, `report.json`, `grid_overlay.png`를 함께 확인합니다. 출력 폴더는 비어 있거나 존재하지 않아야 합니다. 명령을 반복할 때는 새로운 실행 폴더 이름을 사용합니다.
 
+## sprite-gen 시트와 manifest 검증
+
+개발 소스에는 sprite-gen의 완성 PNG와 `manifest.json`을 직접 받는 검사를
+추가했습니다. 골격이나 별도의 Pixelwright 스프라이트 명세가 필요하지 않습니다.
+
+```sh
+python pixelwright/scripts/pixelwright.py sprite-gen --sheet sprite-sheet-alpha.png --manifest manifest.json --max-colors 32 --out-dir runs/atlas-audit-v1
+```
+
+[sprite-gen](https://github.com/aldegad/sprite-gen)의 출력 규격에 의존하는
+연동입니다. [패키지 메타데이터](pixelwright/upstream-integrations.json)에
+원본 저장소·라이선스·확인한 버전/커밋, `data_format` 관계와
+`runtime_required: false`를 기록합니다. CLI와 보고서의 `upstream`에도
+표시하며, 호환성 확인 버전을 입력 파일을 생성한 버전으로 단정하지 않습니다.
+
+원래 요청 파일이 있으면 `--max-colors` 대신 `--request sprite-request.json`으로
+팔레트 제한을 읽습니다. manifest에 기록된 실제 프레임 좌표를 사용해 공유 팔레트,
+안전 여백, 동작별 외곽 크기·보이는 면적의 일관성을 검사합니다. 크기 이상은 자세나
+가림 때문일 수 있어 REVIEW로 표시합니다. 원본은 보존하며 JSON 보고서와 프레임
+경계·측정값을 표시한 이미지를 출력합니다.
+
+[기사 돌격 예시](docs/examples/mounted-knight-charge-v1/)에서는 실제 62색으로
+32색 제한을 넘었고, 8개 중 7프레임이 여백을 위반했으며, 2프레임이 크기 검토
+대상으로 잡혔습니다. [실제 보고서](docs/examples/mounted-knight-charge-v1/manifest-audit-v2/report.json)
+· [프레임 비교](docs/examples/mounted-knight-charge-v1/manifest-audit-v2/frames.png)
+· [입력 형식과 판정 범위](pixelwright/references/external-atlases.md)
+· [검증 기록](docs/VALIDATION_external_atlases_ko.md).
+도트 격자와 자연스러운 움직임은 각각 별도 검사 대상입니다. 이 소스에서 설치
+패키지를 다시 빌드해야 하며, 기존 v0.6.2 배포 파일은 변경하지 않았습니다.
+
 ## 팔레트 재사용·추출·색상 변환
 
 버전 0.5.0은 이름 있는 색상과 명암 램프를 담는 재사용 JSON 팔레트 라이브러리를 추가합니다. 작화 명세의 인라인 `palette` 대신 `palette_file`을 지정하면 여러 논리 행렬에서 같은 색상 토큰을 쓸 수 있습니다. [팔레트 예제](pixelwright/examples/palette-demo/)에는 라이브러리를 참조하는 작화와 16×16·8배 프로필이 있습니다.
@@ -122,15 +152,40 @@ python pixelwright/scripts/pixel_layers.py compose --manifest pixelwright/exampl
 
 이 모드는 레이어의 이진 투명도, 명시적인 공통 팔레트와 가시 RGB 예산, 투명 픽셀까지 정확한 RGBA를 요구합니다. 불투명 셀을 덮어쓰는 방식으로 합성하며 반투명 혼합·크기 변경·회전·잘라내기를 하지 않습니다. 불투명 최종 캔버스 위에 투명 배경의 전경 레이어를 올릴 수 있습니다. 기술 검사 후에는 각 레이어와 완성 장면의 접점·가림·광원·가독성을 눈으로 검수합니다. QA 격자는 작화와 별도 산출물로 유지합니다. 자세한 형식은 [레이어 작업·목록 문서](pixelwright/references/layers.md)에 있습니다.
 
-## 3D 골격을 이용한 이미지 생성
+## 골격 없이 일관적인 2D 애니메이션 생성·검증
 
-실제 Blender 골격과 38개 갑옷·장비 메시를 먼저 만들고, 고정 직교 카메라의 구도를 이미지 생성에 전달하는 [3D 제작 경로](docs/SPRITE_3D_ko.md)를 추가했습니다. 공통 기준 캐릭터를 사용해 동작별 6프레임 시트를 생성하고, 프레임별 크기 보정 없이 검사합니다. 소스 체크아웃에서 사용하는 선택적 개발 도구입니다.
+새 [`pixel_sequence.py`](pixelwright/scripts/pixel_sequence.py)는 선택한 2D 시안과 물체에 맞게 이름 붙인 부위·특징점을 사용합니다. 실제로 존재하지 않는 물체도 Blender나 사람 관절 이름 없이 다룹니다. 외형·프레임 크기·팔레트·포즈·시간을 고정하고, 같은 시안으로 시트를 생성한 뒤 실제 그림을 독립 관찰해 부위 크기·색·무늬·비율·연결·시간에 따른 움직임을 검사합니다. 특징점의 상대 움직임으로 물체 전체 이동과 부위 자체 움직임을 구분합니다.
+
+이 기능은 `codex/design-first-sprites` / [PR #10](https://github.com/jungducknam/pixelwright/pull/10)의 변경입니다. 이 소스에서 설치 ZIP을 빌드해야 하며 기존에 발행한 v0.6.2 릴리스는 변경하지 않았습니다. 설치 ZIP에 실행 도구·참조 문서·비인간형 튜토리얼이 포함됩니다.
+
+```sh
+python pixelwright/scripts/pixel_sequence.py prepare --spec pixelwright/examples/sequence-orbit/spec.json --reference pixelwright/examples/sequence-orbit/reference.png --out-dir runs/orbit-v1
+python pixelwright/scripts/pixel_sequence.py import --run runs/orbit-v1 --state orbit --image pixelwright/examples/sequence-orbit/sheet.png --producer authored-tutorial
+python pixelwright/examples/sequence-orbit/observe_fixture.py --run runs/orbit-v1 --out runs/orbit-observed.json
+python pixelwright/scripts/pixel_sequence.py check --run runs/orbit-v1 --observations runs/orbit-observed.json --out-dir runs/orbit-audit
+```
+
+튜토리얼은 직접 작성한 테스트 작화입니다. 별도의 [실제 생성 예제](docs/examples/aetherseed-2d/)는 3D 입력 없이 선택한 2D 시안과 부유 동작 6프레임을 만들었습니다.
+
+![Aetherseed 부유 초안 — 픽셀 PASS, 전체 FAIL](docs/examples/aetherseed-2d/audit/hover/pixel-audit/animations/hover.gif)
+
+파생 PNG의 픽셀 규격은 통과하지만, 관찰한 외형·움직임이 고정 계약을 벗어나 **전체 FAIL·작화 수정 필요**입니다. 미관찰·미검토는 REVIEW로 남깁니다. 부위·특징점은 관찰 입력이며 자동 의미 인식이나 자연스러움을 보증하지 않습니다. [제작 절차](docs/SPRITE_2D_ko.md), [형식 명세](pixelwright/references/sequences.md), [검증 기록](docs/VALIDATION_sequences_ko.md), [요구사항·진행 상황](docs/SPRITE_REQUIREMENTS_AND_STATUS_ko.md)을 참고합니다. 구현은 [#13](https://github.com/jungducknam/pixelwright/issues/13)에서 추적합니다.
+
+## 선택적 3D 경로: 2D 시안 먼저, 골격은 동작에 사용
+
+[애니메이션 제작 경로](docs/SPRITE_3D_ko.md)는 프롬프트나 사용자 참고 이미지로 2D 도트 캐릭터를 먼저 만듭니다. 그 시안의 비율에 맞춰 맨 골격을 3D로 구성한 뒤, 투영된 포즈로 같은 2D 캐릭터를 새로 그립니다. 골격은 카메라·관절·깊이를, 2D 시안은 외형을 결정합니다. Blender 장면에는 갑옷·장비 메시가 없습니다. 소스 체크아웃에서 사용하는 선택적 개발 도구입니다.
+
+![골격을 만들기 전에 생성한 2D 시안](docs/examples/knight-design-first/design.png)
 
 | 걷기 | 공격 | 막기 |
 | --- | --- | --- |
-| ![3D 가이드로 생성한 걷기](docs/examples/knight-3d/walk.gif) | ![3D 가이드로 생성한 공격](docs/examples/knight-3d/attack.gif) | ![3D 가이드로 생성한 막기](docs/examples/knight-3d/block.gif) |
+| ![걷기 초안](docs/examples/knight-design-first/audit/walk.gif) | ![공격 초안](docs/examples/knight-design-first/audit/attack.gif) | ![막기 초안](docs/examples/knight-design-first/audit/block.gif) |
 
-실제 생성 결과는 **128×128 논리 프레임, 공통 19색, 18프레임의 픽셀·3D 투영 검사 PASS**입니다. [Blender 파일·시트·격자 미리보기·생성 출처·별도 시각 검토](docs/examples/knight-3d/)를 함께 제공합니다. 투영 영역 검사는 생성된 그림의 의미론적 부위 길이를 증명하는 검사가 아니므로 시각 검토를 별도로 수행합니다.
+실제 생성 초안은 **128×128 논리 프레임, 공통 24색**입니다. 픽셀 저장 규격과 3D 골격 검사는 PASS지만, 그림을 별도로 관찰한 검사에서는 포즈·장비 크기 실패가 있어 **완성 에셋으로 승인하지 않았습니다**. [예제](docs/examples/knight-design-first/)에 원본 입력, GIF, 실제 격자, 관찰 좌표와 실패 보고서를 보존했습니다. 동작 프레임마다 크기나 중심을 보정하지 않으며, 정상 골격만으로 그림을 통과시키지 않습니다. 이전 [메시 외형 전사 실험](docs/examples/knight-3d/)은 이력으로 남깁니다.
+
+[최신 통합 검증](docs/VALIDATION_design_first_ko.md)에는 Pillow 13 대응, 시안 보호·재생성 원본 보존, 독립 관찰 입력 검사와 실제 예제의 재검사 결과를 기록했습니다.
+
+[요구사항과 진행 상황](docs/SPRITE_REQUIREMENTS_AND_STATUS_ko.md)에 사용자 요구, 구현 상태, 걷기의 접지·체중 이동·반복 연결 결함과 후속 작업을 정리했습니다. 현재 걷기는 자연스러운 보행 품질을 충족하지 못합니다.
 
 ## 2D 스프라이트 시트와 골격 검사
 
@@ -183,7 +238,7 @@ python pixelwright/scripts/pixel_sprite.py check --spec pixelwright/examples/spr
 
 로컬 설치 경로와 호출 방식은 [OpenAI 공식 스킬 문서](https://learn.chatgpt.com/docs/build-skills), [Claude Code 공식 스킬 문서](https://code.claude.com/docs/en/skills)를 따릅니다. Windows를 포함해 `~`는 사용자 홈 폴더를 뜻합니다.
 
-사용자 스킬 업로드를 지원하는 Claude 환경에서는 아래 명령으로 설치 ZIP을 만든 뒤 호스트의 스킬 화면에서 업로드합니다. 코드 실행과 파일 생성을 활성화하고 Python 의존성이 사용 가능한지 확인합니다. 다른 ChatGPT 환경이나 API 기반 호스트에는 해당 환경의 스킬 로더와 실행 도구가 필요합니다. Pixelwright에는 공급자별 생성 API 어댑터가 포함되지 않습니다. [플랫폼 호환성 안내](docs/COMPATIBILITY_ko.md)와 [Claude 공식 사용자 스킬 문서](https://support.claude.com/en/articles/12512180-use-skills-in-claude)를 참고합니다.
+사용자 스킬 업로드를 지원하는 Claude 환경에서는 아래 명령으로 설치 ZIP을 만든 뒤 호스트의 스킬 화면에서 업로드합니다. 코드 실행과 파일 생성을 활성화하고 Python 의존성이 사용 가능한지 확인합니다. 다른 ChatGPT 환경이나 API 기반 호스트에는 해당 환경의 스킬 로더와 실행 도구가 필요합니다. 시퀀스 생성에는 호스트 이미지 도구 또는 명시적인 Images 호환 HTTP 어댑터를 선택할 수 있으며, 검사와 튜토리얼 실행에는 API 계정이 필요하지 않습니다. [플랫폼 호환성 안내](docs/COMPATIBILITY_ko.md)와 [Claude 공식 사용자 스킬 문서](https://support.claude.com/en/articles/12512180-use-skills-in-claude)를 참고합니다.
 
 스킬을 호출한 뒤 다음과 같이 요청할 수 있습니다.
 
@@ -251,6 +306,8 @@ python tools/verify_release.py --archive dist/pixelwright-v0.6.2.zip --out-dir r
 ## 지원 범위·라이선스·보안
 
 버전 0.6.2는 **정적 PNG 캐릭터·아이템·UI 아이콘, 재사용 팔레트, 선택적 레이어 장면, 골격을 선언한 스프라이트 시트 애니메이션**을 지원합니다. 기술적 PASS는 검사한 파일의 격자, 셀 내부의 정확한 단색, 선언한 프로필 제약을 확인합니다. 색상 변환은 선택한 목표 색상도 확인하며, 팔레트 추출과 램프 생성은 작화의 PASS를 판정하지 않습니다. 레이어 합성은 레이어별 검사와 최종 검사를 모두 통과해야 합니다. 미적 품질이나 다른 앱의 확대 표시 방식까지 보장하지는 않습니다. 실루엣·가독성·팔레트·재질 디테일은 별도로 검수합니다. 리그 검사는 선언한 부위의 도트가 선언한 골격과 일관되는지 확인하며, 해부 구조를 추정하거나 타이밍·무게감·매력을 판정하지 않습니다. 애니메이션 PNG 입력은 계속 지원하지 않습니다.
+
+현재 개발 브랜치는 `pixel_sequence.py`로 선택한 2D 시안의 생성과 독립 관찰에 따른 부위·시간 검사를 추가하며 골격을 필수로 요구하지 않습니다. 작화 품질의 한계는 동일하게 명시하고 생성 원본과 선언한 파생 변환을 구분합니다.
 
 Pixelwright에는 **Apache License 2.0**을 적용합니다. [LICENSE](LICENSE)와 [NOTICE](NOTICE)를 확인합니다.
 
